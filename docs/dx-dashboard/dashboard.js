@@ -52,6 +52,7 @@ function render(){
  $('stages').innerHTML=maturityLevels.map(l=>`<div class="stage ${r.stage===l.stage?'current':''}" ${r.stage===l.stage?'aria-current="step"':''}><b>${l.stage}단계${r.stage===l.stage?' ●':''}</b>${l.title}<small>${l.min}~${l.stage===5?'100 이하':l.min+20+' 미만'}</small></div>`).join('');
  $('bars').innerHTML=r.domains.map(d=>`<button class="domain-button" data-domain="${d.id}" aria-pressed="${selected===d.id}" aria-controls="detail"><span class="bar-label"><span>${d.id}. ${d.title}</span><strong>${d.score===null?'미산정':displayScore(d.score)+'점'}${d.valid>=2?' · '+levelFor(d.score).stage+'단계':' · 해석 보류'}</strong></span><span class="bar-track" aria-hidden="true"><span class="bar-fill" style="width:${d.score??0}%"></span>${d.score===0?'<span class="bar-zero"></span>':''}</span><span class="tiny">응답 ${d.answered}/4 · 유효 ${d.valid}/4${d.answered<4?' · 부분 응답':''}</span></button>`).join('');
  renderDetail(r);
+ renderDiagnosis();
  $('quality-items').innerHTML=[
  ['미응답·미확인',`${r.missing.length+r.unknown.length}개`,`미응답: ${r.missing.join(', ')||'없음'} / 모름: ${r.unknown.join(', ')||'없음'} / 해당 없음: ${r.na.join(', ')||'없음'}`],
  ['동일 점수 선택',q.uniform?`${r.valid}개 동일`:'반복 패턴 없음',q.uniform?'실제 현황 또는 시험 입력인지 확인하세요. 동일 선택만으로 오류라고 단정하지 않습니다.':'동일 선택 여부는 간단한 참고 점검이며 응답 신뢰성을 보증하지 않습니다.'],
@@ -81,9 +82,9 @@ $('file').addEventListener('change',async e=>{
  finally{e.target.value='';}
 });
 $('reset').addEventListener('click',()=>{importSequence++;current=publicAnswers();publicMode=true;sourceName='2026-09-17 공개 예비분석 요약';selected='A';render();$('status').textContent='공개 예비분석 요약으로 돌아왔습니다.';});
-let closed=[];
-window.addEventListener('beforeprint',()=>{closed=[...document.querySelectorAll('details')].filter(d=>!d.open);closed.forEach(d=>d.open=true);});
-window.addEventListener('afterprint',()=>{closed.forEach(d=>d.open=false);closed=[];});
+let closed=[],printFilter='all',printOpen=[];
+window.addEventListener('beforeprint',()=>{printFilter=$('diagnosis-filter').value;printOpen=[...document.querySelectorAll('.diagnosis-item[open]')].map(d=>d.id);$('diagnosis-filter').value='all';renderDiagnosis();closed=[...document.querySelectorAll('details')].filter(d=>!d.open);closed.forEach(d=>d.open=true);});
+window.addEventListener('afterprint',()=>{closed.forEach(d=>d.open=false);closed=[];$('diagnosis-filter').value=printFilter;renderDiagnosis();printOpen.forEach(id=>{const d=$(id);if(d)d.open=true;});});
 $('print').addEventListener('click',()=>window.print());
 if(location.hash==='#current'){
  try{
@@ -94,5 +95,28 @@ if(location.hash==='#current'){
  }catch{$('status').textContent='현재 응답을 전달받지 못해 공개 예비분석을 표시합니다. 응답 JSON을 불러와 주세요.';}
  history.replaceState(null,'',location.pathname+location.search);
 }
+const projectQuestions={
+ '압출·성형 품질예측':['C1','A2','D2','C2'], '호스 외관·내측·치수 검사':['C2','D2','D4'],
+ '압출·성형 스케줄링':['B1','B4','B3'], '재공·재고·물류 최적화':['B3','B1','A1'],
+ 'LOT 추적·자연어 조회':['C3','A3','A4'], '설비 이상·예지보전':['D1','A2','D2'],
+ '반복 업무 자동화':['A1','D3','E2'], '로봇·피지컬 AI':['D4','D2','E3']
+};
+function renderDiagnosis(){
+ const rows=scoreQuestions.map(q=>diagnoseItem(q[0],current[q[0]]));
+ const related=[...new Set((current.P1||[]).flatMap(p=>projectQuestions[p]||[]))];
+ const candidates=rows.filter(d=>d.score!==null&&d.score<4).sort((a,b)=>a.score-b.score||(related.indexOf(a.id)<0?99:related.indexOf(a.id))-(related.indexOf(b.id)<0?99:related.indexOf(b.id)));
+ const top=candidates.slice(0,3);
+ $('diagnosis-summary').textContent=publicMode?'현재는 시험 입력 가능성이 있는 공개 예비응답입니다. 아래 내용은 실제 문제가 확인된 진단이 아니라, 해당 답변이 사실일 때 점검할 내용입니다.':`선택값 기준 개선·운영검증 후보 ${candidates.length}개 · 유지·검증 ${rows.filter(d=>d.score===4).length}개 · 현황/적용 확인 ${rows.filter(d=>d.score===null).length}개. 담당 공정에서 실제 사례와 근거를 확인해 주세요.`;
+ $('priority-cards').innerHTML=top.length?top.map(d=>`<article class="priority-card"><span class="pill">${d.id} · ${d.score}/4점 · 확인 후보</span><h3>${esc(d.title)}</h3><p><b>현재 선택</b>${esc(d.asIs)}</p><p><b>확인할 문제</b>${esc(d.issue)}</p><p><b>다음 목표</b>${esc(d.toBe)}</p><button type="button" data-diagnosis-id="${d.id}">실행 방법·확인 자료 보기 ↓</button></article>`).join(''):'<p class="small">점수만으로 개선 후보를 고르지 않았습니다. 최고 선택값은 유지·검증 관점으로, 미응답·모름·해당 없음은 현황 확인 관점으로 아래에서 살펴보세요.</p>';
+ const filter=$('diagnosis-filter').value;
+ $('diagnosis-list').innerHTML=rows.filter(d=>filter==='all'||d.id.startsWith(filter)).map(d=>`<details class="diagnosis-item" id="diagnosis-${d.id}"><summary><span>${d.id} · ${esc(d.title)}</span><small>${esc(d.state)}${d.score!==null?' · '+d.score+'/4점':''}</small></summary>${diagnosisMarkup(d)}<p class="tiny">영역 근거 메모 (응답 원문): ${esc(current['note-'+d.id[0]]||'미입력')}</p></details>`).join('');
+}
+$('diagnosis-filter').addEventListener('change',renderDiagnosis);
+$('priority-cards').addEventListener('click',e=>{const b=e.target.closest('[data-diagnosis-id]');if(!b)return;$('diagnosis-filter').value=b.dataset.diagnosisId[0];renderDiagnosis();const d=$('diagnosis-'+b.dataset.diagnosisId);d.open=true;d.querySelector('summary').focus();});
+$('expand-diagnosis').addEventListener('click',()=>document.querySelectorAll('.diagnosis-item').forEach(d=>d.open=true));
+$('download-diagnosis').addEventListener('click',()=>{
+ const text=`AS-IS / TO-BE 개선 검토표\n자료: ${sourceName}\n회사: ${current.company||'미입력'} / 작성일: ${current.date||'미입력'}\n선택값 기반 가설과 제안이며 현장 검증 전입니다. 기준값·목표·담당은 협의가 필요합니다.\n`+diagnosisReport(current);
+ const url=URL.createObjectURL(new Blob(['\uFEFF'+text],{type:'text/plain;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='송우산업_AS-IS_TO-BE_개선검토표.txt';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);$('status').textContent='전체 20문항 개선 검토표 다운로드를 요청했습니다. 저장 파일을 확인해 주세요.';
+});
 render();
 

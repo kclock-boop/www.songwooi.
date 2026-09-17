@@ -13,7 +13,7 @@ function renderQual(q){
 }
 $('context-fields').innerHTML=contextQuestions.map(renderQual).join('');
 $('plan-fields').innerHTML=planQuestions.map(renderQual).join('');
-$('score-fields').innerHTML=groups.map((g,i)=>`<section class="panel" id="group-${g.id}"><div class="section-head"><span>0${i+2}</span><div><h2>${g.title}</h2><p>${g.subtitle}</p></div></div>${g.items.map(([id,title,hint,opts])=>`<fieldset><legend><span class="code">${id}</span>${title}</legend><p class="hint">${hint}(하나 선택)</p><div class="choices">${opts.map((s,i)=>`<label class="choice"><input type="radio" name="${id}" value="${i}"><span>${s}</span></label>`).join('')}</div><div class="special"><label class="choice"><input type="radio" name="${id}" value="unknown"><span>모름 · 확인 필요</span></label><label class="choice"><input type="radio" name="${id}" value="na"><span>해당 없음</span></label></div></fieldset>`).join('')}<details class="evidence"><summary>${g.id} 영역 근거·확인 메모 <span>(선택)</span></summary><label for="note-${g.id}" class="hint">대상 공정, 실제 사례, 미확인·해당 없음 사유, 확인할 부서</label><textarea id="note-${g.id}" name="note-${g.id}" maxlength="12000" placeholder="예: MES에는 등록되지만 압출·성형 LOT 연결은 현장 확인 필요"></textarea></details></section>`).join('');
+$('score-fields').innerHTML=groups.map((g,i)=>`<section class="panel" id="group-${g.id}"><div class="section-head"><span>0${i+2}</span><div><h2>${g.title}</h2><p>${g.subtitle}</p></div></div>${g.items.map(([id,title,hint,opts])=>`<fieldset><legend><span class="code">${id}</span>${title}</legend><p class="hint">${hint}(하나 선택)</p><p class="plain-question">쉽게 확인하기: ${esc(diagnosticCatalog[id].question)}</p><div class="choices">${opts.map((s,i)=>`<label class="choice"><input type="radio" name="${id}" value="${i}"><span>${s}</span></label>`).join('')}</div><div class="special"><label class="choice"><input type="radio" name="${id}" value="unknown"><span>모름 · 확인 필요</span></label><label class="choice"><input type="radio" name="${id}" value="na"><span>해당 없음</span></label></div><div id="explain-${id}" class="inline-diagnosis"></div></fieldset>`).join('')}<details class="evidence"><summary>${g.id} 영역 근거·확인 메모 <span>(선택)</span></summary><label for="note-${g.id}" class="hint">대상 공정, 실제 사례, 미확인·해당 없음 사유, 확인할 부서</label><textarea id="note-${g.id}" name="note-${g.id}" maxlength="12000" placeholder="예: MES에는 등록되지만 압출·성형 LOT 연결은 현장 확인 필요"></textarea></details></section>`).join('');
 $('guide').innerHTML=groups.map(g=>`<div class="guide-item"><b>${g.id}. ${g.title}</b><p>${g.guide}</p></div>`).join('');
 form.elements.date.value=dateToday();
 function answers(){
@@ -27,7 +27,13 @@ function answers(){
 function update(){
  $('completion-panel').hidden=true;
  $('completion-validation').textContent='';
- const r=calculate(answers());
+ const a=answers(),r=calculate(a);
+ groups.flatMap(g=>g.items).forEach(q=>{
+  const id=q[0],box=$('explain-'+id);
+  if(a[id]===undefined){box.innerHTML='<p class="tiny">답변을 선택하면 현재 상태와 다음 개선 방향을 볼 수 있습니다.</p>';return;}
+  const d=diagnoseItem(id,a[id]);
+  box.innerHTML=`<div class="survey-next"><b>선택에 따른 다음 목표 (제안)</b>${esc(d.toBe)}</div><details><summary>선택한 답변 해석 · ${esc(d.state)} · AS-IS → TO-BE</summary>${diagnosisMarkup(d)}</details>`;
+ });
  $('count').textContent=`${r.answered} / 20`;$('progress').value=r.answered;
  $('total').innerHTML=`${r.total===null?'—':displayScore(r.total)}<small>/ 100</small>`;
  $('assessment').textContent=r.label;
@@ -38,7 +44,7 @@ function update(){
  return r;
 }
 const status=s=>{$('status').textContent=s;};
-function payload(){const a=answers();return {schema:'songwoo-dx-survey',version:1,savedAt:new Date().toISOString(),answers:a,result:calculate(a)};}
+function payload(){const a=answers();return {schema:'songwoo-dx-survey',version:1,savedAt:new Date().toISOString(),answers:a,result:calculate(a),interpretation:{version:1,notice:'선택값 기반 확인 가설과 개선 제안. 현장 검증 필요.',items:groups.flatMap(g=>g.items.map(q=>diagnoseItem(q[0],a[q[0]])))}};}
 function validate(data){
  if(!data||data.schema!=='songwoo-dx-survey'||data.version!==1||!data.answers||typeof data.answers!=='object'||Array.isArray(data.answers))throw new Error('송우산업 사전 설문 v1 응답 파일이 아닙니다.');
  const a=data.answers, cleaned={};
@@ -77,6 +83,7 @@ function report(){
  lines.push('\n[자동 진단 결과]',r.total===null?'종합점수: 보류':'종합점수: '+displayScore(r.total)+'/100',r.label,`응답 ${r.answered}/20 · 유효 ${r.valid}/20 · 모름 ${r.unknown.length} · 해당 없음 ${r.na.length}`);
  r.domains.forEach(d=>lines.push(`${d.title}: ${d.score===null?'미산정':displayScore(d.score)+'점'} / 유효 ${d.valid}/4${d.valid<2?' / 해석 보류':''}`));
  lines.push('\n산식: 문항 0~4점 → 영역별 유효 응답 평균÷4×100 → 5개 영역 동일 가중 평균. 20문항 응답 및 영역별 유효 2개 이상일 때 종합점수 산출. 모름·해당 없음 제외.','5단계 구간 (반올림 전 점수 기준):',...maturityLevels.map(l=>`${l.stage}단계 · ${l.title}: ${l.range}. ${l.guide}`),'\n[현장 확인 과제]',...r.recommendations.map(s=>'• '+s),'\n[영역별 컨설팅 가이드]',...groups.map(g=>g.title+': '+g.guide),'\n본 응답은 서버로 제출되지 않았습니다. 파일을 담당 컨설턴트에게 별도로 전달하세요.');
+ lines.push('\n[문항별 AS-IS / TO-BE — 선택값 기반 가설과 제안, 현장 확인 필요]',diagnosisReport(a));
  return lines.join('\n');
 }
 form.addEventListener('input',()=>{dirty=true;update();});
