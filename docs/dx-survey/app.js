@@ -52,6 +52,8 @@ function calculate(a){
  return {answered,valid,missing,unknown,na,domains,total,label,recommendations};
 }
 function update(){
+ $('completion-panel').hidden=true;
+ $('completion-validation').textContent='';
  const r=calculate(answers());
  $('count').textContent=`${r.answered} / 20`;$('progress').value=r.answered;
  $('total').innerHTML=`${r.total===null?'—':Math.round(r.total)}<small>/ 100</small>`;
@@ -127,3 +129,32 @@ window.addEventListener('beforeprint',beforePrint);window.addEventListener('afte
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
 update();
 try{if(localStorage.getItem(key))status('이 브라우저에 이전 임시저장 응답이 있습니다. 필요하면 임시저장 불러오기를 눌러 주세요.');}catch{status('브라우저 저장공간을 사용할 수 없습니다. 작성 후 응답 파일로 저장해 주세요.');}
+
+function completeSurvey(){
+ const r=update();
+ if(r.missing.length){
+  const message=`아직 응답하지 않은 진단 문항이 ${r.missing.length}개 있습니다 (${r.missing.join(', ')}). 모르는 항목은 ‘모름 · 확인 필요’를 선택해 주세요.`;
+  $('completion-validation').textContent=message;
+  status(message);
+  alert(message);
+  document.querySelector(`input[name="${r.missing[0]}"]`).focus();
+  return;
+ }
+ let message;
+ try{
+  localStorage.setItem(key,JSON.stringify(payload()));
+  dirty=false;
+  message='응답과 진단 결과를 이 기기의 현재 브라우저에 저장했습니다.';
+ }catch{
+  message='이 브라우저에는 저장하지 못했습니다. 아래 ‘응답 파일 저장(JSON)’을 눌러 반드시 파일로 보관해 주세요.';
+ }
+ if(r.total===null)message+=' 모름·해당 없음이 많아 종합점수는 보류됩니다. 응답은 그대로 보관하며 현장 인터뷰에서 보완합니다.';
+ $('completion-message').textContent=message;
+ $('completion-panel').hidden=false;
+ $('completion-panel').focus();
+ status(message+' 담당 컨설턴트에게 파일을 별도로 전달해 주세요.');
+}
+$('complete').addEventListener('click',completeSurvey);
+$('complete-bottom').addEventListener('click',completeSurvey);
+$('complete-download').addEventListener('click',()=>$('json').click());
+$('complete-print').addEventListener('click',()=>$('print').click());
