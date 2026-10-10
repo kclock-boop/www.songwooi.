@@ -1,5 +1,11 @@
 # 송우산업 기업소개 및 제조DX AX기획 컨설팅
 
+## ⭐ 정보화수준 조사 결과분석
+
+### [▶ 완성된 컬러 분석 화면 열기](https://kclock-boop.github.io/www.songwooi./docs/information-analysis/)
+
+저장소 첫 화면의 `정보화수준-분석-바로가기.md` 파일을 눌러도 다시 찾을 수 있습니다.
+
 ## ⭐ AI 수준진단 바로가기
 
 ### [▶ 완성된 컬러 분석 화면 열기](https://kclock-boop.github.io/www.songwooi./docs/ai-level-analysis/)
