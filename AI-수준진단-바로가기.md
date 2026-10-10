@@ -4,6 +4,8 @@
 
 ## [▶ 송우산업 AI 수준진단 분석 화면 열기](https://kclock-boop.github.io/www.songwooi./docs/ai-level-analysis/)
 
+## [⬇ PDF 파일 바로 다운로드](https://kclock-boop.github.io/www.songwooi./docs/downloads/songwoo-ai-level-analysis.pdf)
+
 주소가 `github.com`으로 시작하면 코드 화면이고, `kclock-boop.github.io`로 시작하면 완성된 웹 화면입니다.
 
 ---
